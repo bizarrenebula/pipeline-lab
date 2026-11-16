@@ -8,8 +8,9 @@ A browser sandbox for data engineering, in the spirit of a network simulator: dr
 - **Simulate**: animated batches of records move along the links. The config changes behaviour: partitions, executors, triggers, checkpoints, warehouse size, refresh schedules. The HUD shows throughput, lag and freshness.
 - **Learn**: every block has a Learn tab covering internals, trade-offs, real-world uses, things to try and interview questions.
 - **Get hints**: the assistant panel suggests the next step and explains failures, such as CORS, HTTP errors, Python tracebacks, lag, idle cores and stale dashboards. Many hints come with one-click fixes.
+- **Plan resources**: open Resources and enter the incoming data volume. It suggests Kafka partitions and brokers, Spark executors, memory and shuffle partitions, Flink parallelism, Snowflake warehouse size, RDS and storage, then packs pods onto Kubernetes nodes and estimates the monthly cost. Every number shows its reasoning. Any value can be overridden, and Apply writes the plan into the design.
 - **Run for real**: HTTP API, File, Script (Python via Pyodide, or JavaScript), Table and Scheduler blocks run in the browser. Results show in the Runtime panel.
-- **Export to Docker**: generates `docker-compose.yml`, `setup.sh` (it prompts for credentials and connections, writes `.env`, then runs `docker compose up`), connector configs, Spark/Flink jobs, a dbt project, an Airflow DAG and data generators.
+- **Export to Docker**: generates `docker-compose.yml`, `setup.sh` (it prompts for credentials and connections, writes `.env`, then runs `docker compose up`), connector configs, Spark/Flink jobs, a dbt project, an Airflow DAG and data generators. Cloud designs also get `cloud/PLAN.md` and starter Kubernetes manifests (SparkApplication, FlinkDeployment, Strimzi node pool).
   - Snowflake is SaaS. Locally it is replaced by Postgres, unless you give real credentials to `setup.sh`.
 
 ## Ready-made scenarios
@@ -37,6 +38,7 @@ python3 -m http.server 8000   # then open http://localhost:8000
 | `js/engine.js` | Simulation tick, queues, capacity, record batches |
 | `js/runtime.js` | Real in-browser execution |
 | `js/hints.js` | Assistant rules (next step and troubleshooting) |
+| `js/planner.js`, `js/planner-ui.js` | Resource planner: sizing rules, price lists, Kubernetes packing, panel |
 | `js/export.js` | Docker bundle generator |
 | `js/scenarios.js` | Ready-made scenarios; failure drills and interview challenges go here later |
 | `js/ui.js` | Canvas, palette, inspector, runtime dock |

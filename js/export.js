@@ -1089,6 +1089,10 @@ bin/sql-client.sh -f /tmp/q.sql 2>&1 | grep -v "^Flink SQL> *$\\|^$\\|^WARNING\\
     F['setup.sh'] = setupScript({ needPgOltp, needS3, needWh, hasSnowflake: has('snowflake'), prompts, urls, hasSpark: has('spark'), hasRunner: !!simple.length });
     F['.env.example'] = '# Copy to .env or run ./setup.sh to create it interactively.\n' + envExample({ needPgOltp, needS3, needWh, prompts });
     F['.gitignore'] = '.env\noutput/*.csv\n';
+    if (PL.planner && PL.planner.hasCloud()) {
+      Object.assign(F, PL.planner.exportFiles(yaml, n => svc[n.id]));
+      notes.push(S.plan ? 'cloud/PLAN.md has the resource plan, with Kubernetes manifests in cloud/k8s/ for components planned on Kubernetes. Locally, Kafka partitions, Spark executors, Flink parallelism and the warehouse size come from the design: press Apply in Resources to make them follow the plan.' : 'cloud/PLAN.md sizes this design for the cloud with default volumes. Open Resources in the app to set your own.');
+    }
     F['README.md'] = readme(nodes, svc, urls, notes);
     return { files: F, notes, urls, services: Object.keys(services) };
 

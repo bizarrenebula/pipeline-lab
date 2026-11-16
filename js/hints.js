@@ -153,6 +153,14 @@
     }),
     () => S.nodes.filter(n => n.type === 'snowflake' && !n.cfg.suspend && S.t > 30).map(n => ({ id: 'suspend-' + n.id, level: 'tip', node: n, text: `${n.name} never suspends, so it bills ${({ XS: 1, S: 2, M: 4, L: 8, XL: 16 })[n.cfg.size]} credits every hour even when idle.`, actions: [setCfg(n, 'suspend', true, 'Turn on auto-suspend')] })),
     () => S.nodes.filter(n => n.type === 'cdc' && n.cfg.mode === 'poll').map(n => ({ id: 'poll-' + n.id, level: 'tip', node: n, text: `${n.name} polls, so deletes never reach downstream tables and quick successive updates are lost.`, actions: [setCfg(n, 'mode', 'log', 'Switch to log-based')] })),
+    () => {
+      if (!PL.planner || !PL.planner.hasCloud()) return [];
+      if (!S.plan || !S.plan.seen) return S.t > 20 ? [{ id: 'plan', level: 'tip', text: 'How big would this be for real? Resources sizes partitions, executors, parallelism and the warehouse from your data volume, packs pods onto Kubernetes nodes and estimates the monthly cost.', actions: [{ label: 'Open Resources', run: () => PL.openPlanner() }] }] : [];
+      const d = PL.planner.diffs(); if (!d.length) return [];
+      const lab = x => (PL.TYPES[x.n.type].cfg.find(c => c.k === x.k) || { label: x.k }).label;
+      const ex = d.slice(0, 2).map(x => `${x.n.name} ${lab(x).toLowerCase()} ${x.from} → ${x.to}`).join(', ');
+      return [{ id: 'plandiff-' + d.map(x => x.n.id + x.k + x.to).join(), level: 'tip', node: d[0].n, text: `The design differs from your resource plan in ${d.length} setting${d.length === 1 ? '' : 's'}: ${ex}${d.length > 2 ? '…' : ''}.`, actions: [{ label: 'Apply plan', run: () => { const k = PL.planner.apply(); ui.toast(`Applied ${k} change${k === 1 ? '' : 's'}`); } }, { label: 'Open Resources', run: () => PL.openPlanner() }] }];
+    },
     () => S.nodes.length >= 4 && !S.nodes.some(n => RT.results[n.id]) ? [{ id: 'export', level: 'tip', text: 'When the design looks right, Export to Docker gives you a compose file and a setup script that runs it on your machine.', actions: [{ label: 'Export', run: () => PL.openExport() }] }] : []
   ];
 

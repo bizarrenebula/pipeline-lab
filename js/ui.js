@@ -831,7 +831,7 @@
   }
   function loadScenario(id) {
     const s = PL.SCENARIOS.find(x => x.id === id); if (!s) return;
-    S.nodes = []; S.links = []; S.particles = []; S.t = 0; S.nid = 1; S.lid = 1; RT.results = {};
+    S.nodes = []; S.links = []; S.particles = []; S.t = 0; S.nid = 1; S.lid = 1; RT.results = {}; S.plan = s.plan ? JSON.parse(JSON.stringify(s.plan)) : null;
     const map = {};
     s.nodes.forEach(([key, type, x, y, cfg, name]) => { map[key] = PL.addNode(type, x, y, JSON.parse(JSON.stringify(cfg)), null, name).id; });
     s.links.forEach(([a, b]) => PL.addLink(map[a], map[b]));
@@ -840,7 +840,7 @@
   }
   ui.loadScenario = loadScenario;
   function serialize() {
-    return { v: 1, scenario: S.scenario, tipHidden: !!S.tipHidden, view: S.view,
+    return { v: 1, scenario: S.scenario, tipHidden: !!S.tipHidden, view: S.view, plan: S.plan || null,
       nodes: S.nodes.map(n => ({ id: n.id, type: n.type, name: n.name, x: n.x, y: n.y, cfg: n.cfg })),
       links: S.links.map(l => ({ id: l.id, from: l.from, to: l.to })) };
   }
@@ -850,7 +850,7 @@
     S.nodes = []; S.links = []; S.particles = []; S.nid = 1; S.lid = 1;
     d.nodes.forEach(n => { if (PL.TYPES[n.type]) PL.addNode(n.type, n.x, n.y, n.cfg, n.id, n.name); });
     (d.links || []).forEach(l => { if (PL.byId(l.from) && PL.byId(l.to)) PL.addLink(l.from, l.to, l.id); });
-    S.scenario = d.scenario; S.tipHidden = d.tipHidden;
+    S.scenario = d.scenario; S.tipHidden = d.tipHidden; S.plan = d.plan || null;
     if (d.view) { S.view = d.view; applyView(); } else requestAnimationFrame(fit);
     select(null); syncNodes(); renderDock();
     const s = PL.SCENARIOS.find(x => x.id === d.scenario); showTip(S.tipHidden ? null : s);

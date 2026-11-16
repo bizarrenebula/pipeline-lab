@@ -70,7 +70,9 @@ PL.SCENARIOS = [
       ['bi', 'bi', 1400, 0, { mode: 'extract', refresh: 30 }, 'Finance report'],
       ['af', 'airflow', 560, 220, { interval: 40 }, 'Airflow DAG']
     ],
-    links: [['pg', 'sp'], ['sp', 's3'], ['s3', 'sf'], ['sf', 'dbt'], ['dbt', 'bi'], ['af', 'sp'], ['af', 'sf'], ['af', 'dbt']]
+    links: [['pg', 'sp'], ['sp', 's3'], ['s3', 'sf'], ['sf', 'dbt'], ['dbt', 'bi'], ['af', 'sp'], ['af', 'sf'], ['af', 'dbt']],
+    // resource planner defaults: one nightly run with a 60 minute window
+    plan: { workload: { srcs: {}, peak: 3, growth: 30, retention: 7, history: 365, runs: 1, window: 60 }, k8sNode: 'm6i.2xlarge', target: {}, manual: {} }
   },
   { id: 'empty', name: 'Empty canvas', blurb: 'Start from scratch.', tip: '', nodes: [], links: [] }
 ];
