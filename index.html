@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pipeline Lab</title>
+<meta name="description" content="Sketch data pipelines on an endless canvas, watch records flow, learn how each tool works, run simple flows in the browser and export real ones to docker compose.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="css/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230B7A70' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='5' cy='12' r='2.5'/%3E%3Ccircle cx='19' cy='6' r='2.5'/%3E%3Ccircle cx='19' cy='18' r='2.5'/%3E%3Cpath d='M7.5 12c5 0 5-6 9-6M7.5 12c5 0 5 6 9 6'/%3E%3C/svg%3E">
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <button class="btn icon ghost" id="palToggle" aria-label="Show components"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M7.5 12c5 0 5-6 9-6M7.5 12c5 0 5 6 9 6"/></svg>
+      <span>Pipeline Lab</span>
+    </div>
+    <div class="tb-sep hide-sm"></div>
+    <button class="btn ghost" id="scenBtn" aria-haspopup="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
+      <span class="hide-sm">Scenarios</span>
+    </button>
+    <div class="tb-sep hide-sm"></div>
+    <button class="btn icon" id="playBtn" title="Pause simulation (Space)" aria-label="Pause simulation"></button>
+    <div class="seg hide-sm" id="speedSeg" role="group" aria-label="Simulation speed">
+      <button data-v="0.5">½×</button><button data-v="1" class="on">1×</button><button data-v="2">2×</button><button data-v="4">4×</button>
+    </div>
+    <span class="clock hide-md" id="clock">T+00:00</span>
+    <div class="spacer"></div>
+    <button class="btn" id="runBtn" title="Run the API, file, script and table blocks for real">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5z"/></svg><span>Run flow</span>
+    </button>
+    <button class="btn primary" id="exportBtn" title="Generate docker compose bundle">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 19.5h14"/></svg><span class="hide-sm">Export to Docker</span>
+    </button>
+    <button class="btn icon ghost" id="moreBtn" aria-label="More actions"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+  </header>
+
+  <main id="stage">
+    <canvas id="cv"></canvas>
+    <div id="world"></div>
+    <div id="empty" hidden><b>Empty canvas</b>Drag a component from the left, or open Scenarios to load a ready-made pipeline.</div>
+    <div id="tipcard" hidden></div>
+
+    <aside id="palette" aria-label="Components">
+      <div class="pal-head"><b>Components</b><span style="color:var(--faint);font-size:12px">drag or click</span></div>
+      <input class="pal-search" id="palSearch" type="search" placeholder="Search" aria-label="Search components">
+      <div class="pal-list" id="palList"></div>
+    </aside>
+
+    <aside id="inspector" hidden aria-label="Inspector"></aside>
+    <section id="assist" class="assist" aria-label="Assistant" aria-live="polite"></section>
+
+    <div id="hud">
+      <span><span class="k">Ingest </span><span class="v" id="hIngest">0/s</span></span>
+      <span><span class="k">Backlog </span><span class="v" id="hBacklog">0</span></span>
+      <span><span class="k">Dashboard freshness </span><span class="v" id="hFresh">–</span></span>
+      <span class="legend hide-md"><span><i style="background:var(--ins)"></i>insert</span><span><i style="background:var(--upd)"></i>update</span><span><i style="background:var(--del)"></i>delete</span><span><i style="background:var(--ctrl)"></i>trigger</span><span><i style="background:var(--real);border-radius:2px"></i>real run</span></span>
+    </div>
+    <div id="zoom">
+      <button class="btn icon" id="zIn" aria-label="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></button>
+      <button class="btn icon" id="zOut" aria-label="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 12h12"/></svg></button>
+      <button class="btn icon" id="zFit" aria-label="Fit to screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    </div>
+
+    <section id="dock" aria-label="Runtime">
+      <div class="dock-head" id="dockHead"></div>
+      <div class="dock-body" id="dockBody"></div>
+    </section>
+  </main>
+</div>
+
+<div id="modal" hidden></div>
+<div id="toasts" aria-live="polite"></div>
+<div id="menus"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="js/registry.js"></script>
+<script src="js/theory.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/runtime.js"></script>
+<script src="js/export.js"></script>
+<script src="js/scenarios.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/hints.js"></script>
+</body>
+</html>
