@@ -10,6 +10,7 @@ A browser sandbox for data engineering, in the spirit of a network simulator: dr
 - **Get hints**: the assistant panel suggests the next step and explains failures, such as CORS, HTTP errors, Python tracebacks, lag, idle cores and stale dashboards. Many hints come with one-click fixes.
 - **Plan resources**: open Resources and enter the incoming data volume. It suggests Kafka partitions and brokers, Spark executors, memory and shuffle partitions, Flink parallelism, Snowflake warehouse size, RDS and storage, then packs pods onto Kubernetes nodes and estimates the monthly cost. Every number shows its reasoning. Any value can be overridden, and Apply writes the plan into the design.
 - **Run for real**: HTTP API, File, Script (Python via Pyodide, or JavaScript), Table and Scheduler blocks run in the browser. Results show in the Runtime panel.
+- **Use it on a phone or tablet**: one finger pans, two fingers pinch-zoom, drag a node to move it, drag from its right-hand port to link. The component list scrolls; tap an item to add it, or swipe it sideways onto the canvas. Drag the edge of any panel (components, inspector, Runtime, assistant) to resize it, and double-click the edge to reset. Sizes are remembered separately for phone and desktop.
 - **Export to Docker**: generates `docker-compose.yml`, `setup.sh` (it prompts for credentials and connections, writes `.env`, then runs `docker compose up`), connector configs, Spark/Flink jobs, a dbt project, an Airflow DAG and data generators. Cloud designs also get `cloud/PLAN.md` and starter Kubernetes manifests (SparkApplication, FlinkDeployment, Strimzi node pool).
   - Snowflake is SaaS. Locally it is replaced by Postgres, unless you give real credentials to `setup.sh`.
 
@@ -42,3 +43,4 @@ python3 -m http.server 8000   # then open http://localhost:8000
 | `js/export.js` | Docker bundle generator |
 | `js/scenarios.js` | Ready-made scenarios; failure drills and interview challenges go here later |
 | `js/ui.js` | Canvas, palette, inspector, runtime dock |
+| `js/layout.js` | Resizable panels (mouse and touch) |

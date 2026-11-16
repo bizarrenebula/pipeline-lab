@@ -38,7 +38,7 @@
   function applyView() { world.style.transform = `translate(${S.view.x}px,${S.view.y}px) scale(${S.view.k})`; }
   function zoomAt(f, cx, cy) {
     const r = stage.getBoundingClientRect(); const sx = cx - r.left, sy = cy - r.top;
-    const k = Math.min(2.2, Math.max(0.25, S.view.k * f)); const ratio = k / S.view.k;
+    const k = Math.min(2.2, Math.max(0.15, S.view.k * f)); const ratio = k / S.view.k;
     S.view.x = sx - (sx - S.view.x) * ratio; S.view.y = sy - (sy - S.view.y) * ratio; S.view.k = k; applyView(); saveSoon();
   }
   function fit() {
@@ -46,10 +46,11 @@
     if (!S.nodes.length) { S.view = { x: r.width / 2, y: r.height / 2, k: 1 }; applyView(); return; }
     const xs = S.nodes.map(n => n.x), ys = S.nodes.map(n => n.y);
     const x0 = Math.min(...xs), x1 = Math.max(...xs) + PL.NW, y0 = Math.min(...ys), y1 = Math.max(...ys) + PL.NH;
-    const narrow = r.width < 760;
-    const left = narrow ? 16 : 250, right = (!$('#inspector').hidden && !narrow) ? 410 : 40, top = $('#tipcard').hidden ? 30 : 90, bottom = 110;
+    const narrow = r.width < 760, tc = $('#tipcard'), ins = $('#inspector');
+    const left = narrow ? 16 : $('#palette').offsetWidth + 30, right = (!ins.hidden && !narrow) ? ins.offsetWidth + 30 : 40;
+    const top = tc.hidden ? 30 : tc.offsetHeight + 24, bottom = narrow && !ins.hidden ? ins.offsetHeight + 24 : 110;
     const w = r.width - left - right, h = r.height - top - bottom;
-    const k = Math.max(0.3, Math.min(1.1, w / (x1 - x0), h / (y1 - y0)));
+    const k = Math.max(narrow ? 0.18 : 0.3, Math.min(1.1, w / (x1 - x0), h / (y1 - y0)));
     S.view.k = k; S.view.x = left + (w - (x1 - x0) * k) / 2 - x0 * k; S.view.y = top + (h - (y1 - y0) * k) / 2 - y0 * k;
     applyView(); saveSoon();
   }
@@ -209,8 +210,8 @@
   }
   function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 
-  function linkAt(wx, wy) {
-    const tol = 9 / S.view.k;
+  function linkAt(wx, wy, px) {
+    const tol = (px || 9) / S.view.k;
     for (const l of S.links) {
       const c = PL.bez(l);
       for (let i = 0; i <= 30; i++) { const p = PL.bpt(c, i / 30); if (Math.hypot(p[0] - wx, p[1] - wy) < tol) return l; }
@@ -225,7 +226,7 @@
   /* ---------- interaction ---------- */
   let drag = null; const pointers = new Map(); let pinch = null;
   stage.addEventListener('pointerdown', e => {
-    if (e.target.closest('#palette, #inspector, #hud, #zoom, #dock, #tipcard')) return;
+    if (e.target.closest('#palette, #inspector, #hud, #zoom, #dock, #tipcard, #assist, .rz')) return;
     const nodeEl = e.target.closest('.node');
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 2) {
@@ -254,7 +255,7 @@
       zoomAt((pinch.k * d / pinch.d) / S.view.k, (a.x + b.x) / 2, (a.y + b.y) / 2); return;
     }
     const [wx, wy] = toWorld(e.clientX, e.clientY);
-    if (!drag) { const l = !e.target.closest('.node') && linkAt(wx, wy); hoverLink = l || null; stage.style.cursor = l ? 'pointer' : ''; return; }
+    if (!drag) { if (e.pointerType !== 'mouse') return; const l = !e.target.closest('.node') && linkAt(wx, wy); hoverLink = l || null; stage.style.cursor = l ? 'pointer' : ''; return; }
     if (drag.kind === 'pan') {
       if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 3) { drag.moved = true; stage.classList.add('panning'); }
       S.view.x = drag.vx + e.clientX - drag.sx; S.view.y = drag.vy + e.clientY - drag.sy; applyView();
@@ -278,7 +279,7 @@
     const [wx, wy] = toWorld(e.clientX, e.clientY);
     if (drag.kind === 'pan') {
       stage.classList.remove('panning');
-      if (!drag.moved) { const l = linkAt(wx, wy); select(l ? { kind: 'link', id: l.id } : null); }
+      if (!drag.moved) { const l = linkAt(wx, wy, e.pointerType === 'mouse' ? 9 : 22); select(l ? { kind: 'link', id: l.id } : null); }
       saveSoon();
     } else if (drag.kind === 'node') {
       if (!drag.moved) select({ kind: 'node', id: drag.id }); else saveSoon();
@@ -293,7 +294,7 @@
   stage.addEventListener('pointerup', endPointer);
   stage.addEventListener('pointercancel', endPointer);
   stage.addEventListener('wheel', e => {
-    if (e.target.closest('#palette, #inspector, #dock, #tipcard')) return;
+    if (e.target.closest('#palette, #inspector, #dock, #tipcard, #assist')) return;
     e.preventDefault();
     const trackpadPan = !e.ctrlKey && e.deltaMode === 0 && (Math.abs(e.deltaX) > 0 || Math.abs(e.deltaY) < 40);
     if (trackpadPan) { S.view.x -= e.deltaX; S.view.y -= e.deltaY; applyView(); saveSoon(); }
@@ -348,13 +349,14 @@
   let palDrag = null;
   $('#palList').addEventListener('pointerdown', e => {
     const it = e.target.closest('.pal-item'); if (!it) return;
-    e.preventDefault();
-    palDrag = { type: it.dataset.type, sx: e.clientX, sy: e.clientY, ghost: null };
-    it.setPointerCapture(e.pointerId);
+    if (e.pointerType === 'mouse') { e.preventDefault(); it.setPointerCapture(e.pointerId); }
+    palDrag = { type: it.dataset.type, sx: e.clientX, sy: e.clientY, ghost: null, touch: e.pointerType !== 'mouse' };
   });
   $('#palList').addEventListener('pointermove', e => {
     if (!palDrag) return;
-    if (!palDrag.ghost && Math.hypot(e.clientX - palDrag.sx, e.clientY - palDrag.sy) > 5) {
+    const dx = Math.abs(e.clientX - palDrag.sx), dy = Math.abs(e.clientY - palDrag.sy);
+    // on touch, vertical movement scrolls the list (the browser cancels the pointer); a sideways drag picks the item up
+    if (!palDrag.ghost && (palDrag.touch ? dx > 10 && dx > dy : Math.hypot(dx, dy) > 5)) {
       const g = document.createElement('div'); g.className = 'ghost-node';
       const T = PL.TYPES[palDrag.type];
       g.innerHTML = `<div class="node" style="transform:scale(${S.view.k});transform-origin:center"><div class="nhead"><span class="ico" style="--c:${catColor(palDrag.type)}">${icon(palDrag.type)}</span><div class="ntitle"><b>${esc(T.label)}</b><small>${esc(T.sub)}</small></div></div></div>`;
@@ -376,6 +378,7 @@
     } else addAtCenter(t);
     palDrag = null;
   });
+  $('#palList').addEventListener('pointercancel', () => { if (palDrag && palDrag.ghost) palDrag.ghost.remove(); palDrag = null; });
   $('#palList').addEventListener('keydown', e => { const it = e.target.closest('.pal-item'); if (it && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); addAtCenter(it.dataset.type); } });
   function addAtCenter(t) {
     const r = stage.getBoundingClientRect();
@@ -700,7 +703,7 @@
     if (open && !was) { // keep the flow visible above the panel
       const r = stage.getBoundingClientRect(), dockTop = r.height - $('#dock').getBoundingClientRect().height - 40;
       const maxY = Math.max(...S.nodes.map(n => (n.y + PL.NH) * S.view.k + S.view.y), 0), minY = Math.min(...S.nodes.map(n => n.y * S.view.k + S.view.y), 1e9);
-      const target = Math.min(r.height * 0.48, 340);
+      const target = $('#dock').getBoundingClientRect().height || Math.min(r.height * 0.48, 340);
       const avail = r.height - target - 60;
       if (maxY > avail) { const shift = Math.min(maxY - avail, Math.max(0, minY - 20)); S.view.y -= shift; applyView(); }
     }
@@ -773,8 +776,9 @@
     closeMenus();
     const m = document.createElement('div'); m.className = 'menu'; m.innerHTML = html;
     const r = anchor.getBoundingClientRect();
-    m.style.top = (r.bottom + 6) + 'px'; m.style.position = 'fixed';
-    if (alignRight) m.style.right = Math.max(8, innerWidth - r.right) + 'px'; else m.style.left = Math.max(8, Math.min(r.left, innerWidth - 348)) + 'px';
+    m.style.top = (r.bottom + 6) + 'px'; m.style.position = 'fixed'; m.style.maxHeight = Math.max(160, innerHeight - r.bottom - 14) + 'px';
+    const w = Math.min(340, innerWidth - 16);
+    if (alignRight) m.style.right = Math.max(8, innerWidth - r.right) + 'px'; else m.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px';
     $('#menus').appendChild(m);
     setTimeout(() => document.addEventListener('pointerdown', function h(e) { if (!m.contains(e.target)) { closeMenus(); document.removeEventListener('pointerdown', h); } }), 0);
     return m;

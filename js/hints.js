@@ -11,7 +11,10 @@
   const SOURCES = ['postgres', 'app', 'api', 'file'];
   const dismissed = new Set();
   let collapsed = false, lastSig = '', peek = false; // peek: opened by hand while the Runtime panel is up
-  try { collapsed = localStorage.getItem('pipelinelab.assist') === 'closed'; } catch (e) { /* no storage */ }
+  let stored = null;
+  try { stored = localStorage.getItem('pipelinelab.assist'); } catch (e) { /* no storage */ }
+  // on a phone the assistant starts folded so the flow stays visible
+  collapsed = stored ? stored === 'closed' : innerWidth < 760;
 
   const fmtS = s => s < 60 ? s.toFixed(0) + ' s' : Math.floor(s / 60) + ' min ' + Math.round(s % 60) + ' s';
   const names = types => types.map(t => T(t).label).join(', ');
