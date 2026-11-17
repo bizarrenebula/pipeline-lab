@@ -6,6 +6,10 @@ A browser sandbox for data engineering, in the spirit of a network simulator: dr
 
 - **Design**: drag blocks onto the canvas and link them. Generic blocks: HTTP API, File, Python/JS script, Table, Scheduler. Platform blocks: Postgres, app events, CDC (Debezium), Kafka, Spark, Flink, Airflow, S3, Iceberg, Snowflake, dbt and BI.
 - **Simulate**: animated batches of records move along the links. The config changes behaviour: partitions, executors, triggers, checkpoints, warehouse size, refresh schedules. The HUD shows throughput, lag and freshness.
+- **Follow a record**: press *Follow a record* (or `t`) to pause the flow and walk one concrete change hop by hop through every branch. Each step animates the record along a link, explains what the next component does with it, shows the payload (WAL entry, Debezium before/after, Kafka partition and offset, SCD2 rows…) and adds the hop to a latency budget. Pick insert, update or delete, use ←/→, or autoplay.
+- **Slow motion and stepping**: run the simulation at ⅒× or ¼×, or pause and step it forward a quarter second at a time (`.`).
+- **Look inside**: double-click a component (or press `i`) for an animated view of its internals, driven by the live simulation: Kafka partitions, offsets, replicas and consumer lag; Iceberg snapshots, manifests and time travel; Spark stages, tasks, shuffle and executors; the Postgres WAL and Debezium's replication slot; Flink checkpoint barriers and watermarks; Snowflake's layers; dbt's model DAG; Airflow's run grid; S3 objects.
+- **Inspect data on links**: click a link (or a moving dot) to see the actual payloads crossing it, with before/after diffs for changes.
 - **Learn**: every block has a Learn tab covering internals, trade-offs, real-world uses, things to try and interview questions.
 - **Get hints**: the assistant panel suggests the next step and explains failures, such as CORS, HTTP errors, Python tracebacks, lag, idle cores and stale dashboards. Many hints come with one-click fixes.
 - **Plan resources**: open Resources and enter the incoming data volume. It suggests Kafka partitions and brokers, Spark executors, memory and shuffle partitions, Flink parallelism, Snowflake warehouse size, RDS and storage, then packs pods onto Kubernetes nodes and estimates the monthly cost. Every number shows its reasoning. Any value can be overridden, and Apply writes the plan into the design.
@@ -37,6 +41,9 @@ python3 -m http.server 8000   # then open http://localhost:8000
 | `js/registry.js` | Component types, config schemas, link rules |
 | `js/theory.js` | Lessons per component |
 | `js/engine.js` | Simulation tick, queues, capacity, record batches |
+| `js/records.js` | Concrete records and what each component does to them (payloads, captions, latency) |
+| `js/trace.js` | Step-through mode: follow one record |
+| `js/inside.js` | Animated internals views per component |
 | `js/runtime.js` | Real in-browser execution |
 | `js/hints.js` | Assistant rules (next step and troubleshooting) |
 | `js/planner.js`, `js/planner-ui.js` | Resource planner: sizing rules, price lists, Kubernetes packing, panel |

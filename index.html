@@ -26,10 +26,12 @@
     </button>
     <div class="tb-sep hide-sm"></div>
     <button class="btn icon" id="playBtn" title="Pause simulation (Space)" aria-label="Pause simulation"></button>
+    <button class="btn icon ghost dim" id="stepBtn" title="Step forward 0.25 s (.)" aria-label="Step simulation forward"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 5.5v13l9.5-6.5z"/><rect x="16" y="5.5" width="3" height="13" rx="1"/></svg></button>
     <div class="seg hide-sm" id="speedSeg" role="group" aria-label="Simulation speed">
-      <button data-v="0.5">½×</button><button data-v="1" class="on">1×</button><button data-v="2">2×</button><button data-v="4">4×</button>
+      <button data-v="0.1" title="Slow motion">⅒×</button><button data-v="0.25">¼×</button><button data-v="0.5">½×</button><button data-v="1" class="on">1×</button><button data-v="2">2×</button><button data-v="4">4×</button>
     </div>
     <span class="clock hide-md" id="clock">T+00:00</span>
+    <button class="btn" id="traceBtn" title="Follow one record hop by hop through the pipeline (t)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="18" r="2.5"/><path d="M7.5 18H14a4 4 0 0 0 0-8h-4a3.5 3.5 0 0 1 0-7h9"/><path d="M16.5 0.5L19 3l-2.5 2.5"/></svg><span class="hide-sm">Follow a record</span></button>
     <div class="spacer"></div>
     <button class="btn" id="planBtn" title="Size the cloud components from your data volume and see the monthly cost">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-5"/><path d="M4 21h16"/></svg><span class="hide-sm">Resources</span>
@@ -85,10 +87,13 @@
 <script src="js/registry.js"></script>
 <script src="js/theory.js"></script>
 <script src="js/engine.js"></script>
+<script src="js/records.js"></script>
 <script src="js/runtime.js"></script>
 <script src="js/planner.js"></script>
 <script src="js/export.js"></script>
 <script src="js/scenarios.js"></script>
+<script src="js/trace.js"></script>
+<script src="js/inside.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/hints.js"></script>
 <script src="js/planner-ui.js"></script>

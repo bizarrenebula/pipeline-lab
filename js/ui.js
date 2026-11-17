@@ -12,7 +12,7 @@
   const fmt = n => { n = Math.max(0, n || 0); if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'; if (n >= 1e4) return Math.round(n / 1e3) + 'k'; if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k'; return n < 10 && n % 1 ? n.toFixed(1) : Math.round(n) + ''; };
   const fmtS = s => s == null || !isFinite(s) ? '–' : s < 1 ? Math.round(s * 1000) + ' ms' : s < 60 ? s.toFixed(1) + ' s' : Math.floor(s / 60) + 'm ' + String(Math.floor(s % 60)).padStart(2, '0') + 's';
   const fmtB = b => b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : b >= 1e6 ? (b / 1e6).toFixed(1) + ' MB' : (b / 1e3).toFixed(0) + ' KB';
-  ui.esc = esc; ui.fmt = fmt;
+  ui.esc = esc; ui.fmt = fmt; ui.fmtB = fmtB; ui.fmtS = fmtS;
   const icon = t => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PL.ICONS[PL.TYPES[t].icon]}</svg>`;
   const catColor = t => PL.CATS[PL.TYPES[t].cat].color;
   ui.icon = icon; ui.catColor = catColor;
@@ -36,6 +36,7 @@
   /* ---------- view ---------- */
   function toWorld(cx, cy) { const r = stage.getBoundingClientRect(); return [(cx - r.left - S.view.x) / S.view.k, (cy - r.top - S.view.y) / S.view.k]; }
   function applyView() { world.style.transform = `translate(${S.view.x}px,${S.view.y}px) scale(${S.view.k})`; }
+  ui.applyView = applyView;
   function zoomAt(f, cx, cy) {
     const r = stage.getBoundingClientRect(); const sx = cx - r.left, sy = cy - r.top;
     const k = Math.min(2.2, Math.max(0.15, S.view.k * f)); const ratio = k / S.view.k;
@@ -87,6 +88,7 @@
       el.classList.toggle('down', !!n.cfg.down);
     }
     $('#empty').hidden = S.nodes.length > 0;
+    if (PL.trace) PL.trace.onGraphChange();
   }
   ui.syncNodes = syncNodes;
 
@@ -185,7 +187,9 @@
         ctx.fillStyle = C.muted; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, m[0], m[1] + 0.5);
       }
     }
-    // particles
+    // particles (dimmed while one record is being followed)
+    const tracing = PL.trace && PL.trace.active;
+    if (tracing) ctx.globalAlpha = 0.22;
     for (const p of S.particles) {
       if (!S.links.includes(p.l)) continue;
       const c = PL.bez(p.l), pt = PL.bpt(c, Math.min(1, p.p));
@@ -199,8 +203,11 @@
       } else {
         const r = 2.6 + Math.min(3.6, Math.log10(p.b.n + 1) * 0.95);
         ctx.fillStyle = C[p.col]; ctx.beginPath(); ctx.arc(pt[0], pt[1], r, 0, Math.PI * 2); ctx.fill();
+        if (peek.hl === p) { ctx.strokeStyle = C.fg; ctx.lineWidth = 2 / Math.max(k, 0.6); ctx.beginPath(); ctx.arc(pt[0], pt[1], r + 4, 0, Math.PI * 2); ctx.stroke(); }
       }
     }
+    ctx.globalAlpha = 1;
+    if (tracing) PL.trace.draw(ctx, k, C);
     if (tempLink) {
       const a = PL.byId(tempLink.from); const x1 = a.x + PL.NW, y1 = a.y + PL.NH / 2, x2 = tempLink.x, y2 = tempLink.y, dx = Math.max(50, Math.abs(x2 - x1) * 0.5);
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(x1 + dx, y1, x2 - dx, y2, x2, y2);
@@ -218,6 +225,16 @@
     }
     return null;
   }
+  let lastTap = { id: null, t: 0 };
+  function particleAt(wx, wy, px) {
+    const tol = px / S.view.k; let best = null, bd = tol;
+    for (const p of S.particles) {
+      if (!p.b || !S.links.includes(p.l)) continue;
+      const pt = PL.bpt(PL.bez(p.l), Math.min(1, p.p)), d = Math.hypot(pt[0] - wx, pt[1] - wy);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
   function nodeAt(wx, wy) {
     for (let i = S.nodes.length - 1; i >= 0; i--) { const n = S.nodes[i]; if (wx >= n.x - 8 && wx <= n.x + PL.NW + 8 && wy >= n.y - 8 && wy <= n.y + PL.NH + 8) return n; }
     return null;
@@ -226,7 +243,7 @@
   /* ---------- interaction ---------- */
   let drag = null; const pointers = new Map(); let pinch = null;
   stage.addEventListener('pointerdown', e => {
-    if (e.target.closest('#palette, #inspector, #hud, #zoom, #dock, #tipcard, #assist, .rz')) return;
+    if (e.target.closest('#palette, #inspector, #hud, #zoom, #dock, #tipcard, #assist, #tracewrap, #lookin, .rz')) return;
     const nodeEl = e.target.closest('.node');
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 2) {
@@ -279,10 +296,18 @@
     const [wx, wy] = toWorld(e.clientX, e.clientY);
     if (drag.kind === 'pan') {
       stage.classList.remove('panning');
-      if (!drag.moved) { const l = linkAt(wx, wy, e.pointerType === 'mouse' ? 9 : 22); select(l ? { kind: 'link', id: l.id } : null); }
+      if (!drag.moved) {
+        const p = particleAt(wx, wy, e.pointerType === 'mouse' ? 9 : 20);
+        if (p) { select({ kind: 'link', id: p.l.id }); peekParticle(p); }
+        else { const l = linkAt(wx, wy, e.pointerType === 'mouse' ? 9 : 22); select(l ? { kind: 'link', id: l.id } : null); }
+      }
       saveSoon();
     } else if (drag.kind === 'node') {
-      if (!drag.moved) select({ kind: 'node', id: drag.id }); else saveSoon();
+      if (!drag.moved) {
+        const now = performance.now(), dbl = lastTap.id === drag.id && now - lastTap.t < 380;
+        lastTap = { id: drag.id, t: now };
+        if (dbl && PL.inside.has(PL.byId(drag.id))) PL.inside.open(drag.id); else select({ kind: 'node', id: drag.id });
+      } else saveSoon();
     } else if (drag.kind === 'link') {
       els.forEach(el => el.classList.remove('drop-ok', 'drop-bad'));
       const target = nodeAt(wx, wy); const a = PL.byId(drag.from);
@@ -294,7 +319,7 @@
   stage.addEventListener('pointerup', endPointer);
   stage.addEventListener('pointercancel', endPointer);
   stage.addEventListener('wheel', e => {
-    if (e.target.closest('#palette, #inspector, #dock, #tipcard, #assist')) return;
+    if (e.target.closest('#palette, #inspector, #dock, #tipcard, #assist, #tracewrap, #lookin')) return;
     e.preventDefault();
     const trackpadPan = !e.ctrlKey && e.deltaMode === 0 && (Math.abs(e.deltaX) > 0 || Math.abs(e.deltaY) < 40);
     if (trackpadPan) { S.view.x -= e.deltaX; S.view.y -= e.deltaY; applyView(); saveSoon(); }
@@ -316,6 +341,15 @@
   document.addEventListener('keydown', e => {
     if (e.target.closest('input, textarea, select, [contenteditable]')) return;
     if (!$('#modal').hidden) { if (e.key === 'Escape') ui.closeModal(); return; }
+    if (PL.trace.active) {
+      if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); PL.trace.next(); return; }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); PL.trace.prev(); return; }
+      if (e.key === 'Escape') { PL.trace.stop(); return; }
+    }
+    if (e.key === 'Escape' && PL.inside.id) { PL.inside.close(); return; }
+    if (e.key === '.') { stepSim(); return; }
+    if (e.key === 't') { PL.trace.start(); return; }
+    if (e.key === 'i' && S.sel && S.sel.kind === 'node') { PL.inside.open(S.sel.id); return; }
     if ((e.key === 'Delete' || e.key === 'Backspace') && S.sel) { e.preventDefault(); deleteSelected(); }
     else if (e.key === 'Escape') { select(null); closeMenus(); }
     else if (e.key === ' ') { e.preventDefault(); setRunning(!S.running); }
@@ -418,13 +452,24 @@
         <div class="ins-title"><input id="insName" value="${esc(n.name)}" aria-label="Name"><small>${esc(T.label)} · ${esc(PL.CATS[T.cat].label)}</small></div>
         <button class="btn icon ghost" id="insClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       <div class="tabs"><button data-tab="cfg" class="${insTab === 'cfg' ? 'on' : ''}">Configure</button><button data-tab="learn" class="${insTab === 'learn' ? 'on' : ''}">Learn</button></div>
-      <div class="ins-body">${insTab === 'cfg' ? cfgTab(n) : learnTab(n)}</div>`;
+      <div class="ins-body">${exploreRow(n)}${insTab === 'cfg' ? cfgTab(n) : learnTab(n)}</div>`;
     ins.querySelector('#insClose').onclick = () => select(null);
+    const li = ins.querySelector('#insInside'); if (li) li.onclick = () => PL.inside.open(n.id);
+    const tr = ins.querySelector('#insTrace'); if (tr) tr.onclick = () => PL.trace.start(n);
     ins.querySelector('#insName').oninput = e => { n.name = e.target.value || T.label; syncNodes(); renderDock(); saveSoon(); };
     ins.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { insTab = b.dataset.tab; buildInspector(); });
     if (insTab === 'cfg') wireControls(n);
     if (keepScroll) ins.querySelector('.ins-body').scrollTop = st;
     updateLive();
+  }
+  const IC_INSIDE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/><path d="M8 10.5h5M10.5 8v5"/></svg>';
+  const IC_TRACE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="18" r="2.5"/><path d="M7.5 18H14a4 4 0 0 0 0-8h-4a3.5 3.5 0 0 1 0-7h9"/><path d="M16.5 0.5L19 3l-2.5 2.5"/></svg>';
+  ui.IC_TRACE = IC_TRACE;
+  function exploreRow(n) {
+    const T = PL.TYPES[n.type];
+    const a = PL.inside.has(n) ? `<button class="btn" id="insInside" title="Animated view of how it works inside (double-click the component, or press i)">${IC_INSIDE}Look inside</button>` : '';
+    const b = !T.control && (PL.REC.isSource(n) ? PL.outLinks(n).length : PL.upstream(n).length) ? `<button class="btn" id="insTrace" title="Step through one record, hop by hop (t)">${IC_TRACE}Follow a record</button>` : '';
+    return a || b ? `<div class="ins-foot explore">${a}${b}</div>` : '';
   }
   function cfgTab(n) {
     const T = PL.TYPES[n.type];
@@ -515,11 +560,59 @@
       <div class="ins-body">
         <section><div class="sec-title">What flows here</div><p style="margin:0">${esc(PL.LINK_TEXT[a.type] || '')}</p></section>
         ${ctrl ? '' : '<section><div class="sec-title">Live</div><div id="insLive"></div></section>'}
+        <section class="peek"><div class="peek-head"><div class="sec-title" style="margin:0">${ctrl ? 'Trigger messages' : 'Data crossing this link'}</div><span class="spacer"></span><button class="btn ghost" id="peekFreeze" style="height:26px;font-size:12px"></button></div>
+          <div class="peek-hint">${ctrl ? 'Each purple diamond is one of these.' : 'Every dot on the link is a batch of records like these. Click a dot on the canvas, or a row below.'}</div>
+          <div id="peekList" class="peek-list"></div><div id="peekDetail" class="pv"></div></section>
         <div class="ins-foot"><button class="btn danger" id="insDel">Remove link</button></div>
       </div>`;
     $('#insClose').onclick = () => select(null);
     $('#insDel').onclick = deleteSelected;
+    $('#peekFreeze').onclick = () => { peek.frozen = !peek.frozen; renderPeek(); };
+    $('#peekList').onclick = e => { const r = e.target.closest('[data-pk]'); if (!r) return; peek.selId = +r.dataset.pk; peek.hl = null; renderPeek(); };
+    if (peek.linkId !== l.id) { peek = { linkId: l.id, items: [], selId: null, frozen: false, last: 0, seq: peek.seq || 0, hl: null }; prefillPeek(l); }
+    renderPeek();
     updateLive();
+  }
+
+  /* ---------- data inspector on links ---------- */
+  let peek = { linkId: null, items: [], selId: null, frozen: false, last: 0, seq: 0, hl: null };
+  const OPCOL = { ins: 'c', upd: 'u', del: 'd' };
+  function addPeek(l, op, pin) {
+    const rec = PL.REC.sampleOnLink(l, op); if (!rec) return null;
+    const it = { id: ++peek.seq, rec, at: S.t, op: rec.op || op };
+    peek.items.unshift(it); if (peek.items.length > 8) peek.items.length = 8;
+    if (pin) peek.selId = it.id;
+    return it;
+  }
+  function prefillPeek(l) {
+    const a = PL.byId(l.from), src = PL.REC.pathTo(a)[0];
+    const mix = src && src.cfg.mix ? { ins: [0.08, 0.02], mix: [0.35, 0.08], upd: [0.7, 0.05] }[src.cfg.mix] : [0, 0];
+    const ops = PL.isControlLink(l) ? ['c'] : ['c', mix[0] > 0.1 ? 'u' : 'c', mix[1] > 0.04 ? 'd' : 'u'];
+    ops.forEach(o => addPeek(l, o));
+  }
+  PL.onArrive = function (p) {
+    if (!S.sel || S.sel.kind !== 'link' || S.sel.id !== p.l.id || peek.frozen || peek.linkId !== p.l.id) return;
+    const now = performance.now(); if (now - peek.last < 700) return; peek.last = now;
+    addPeek(p.l, p.ctrl ? 'c' : OPCOL[p.col] || 'c'); renderPeek();
+  };
+  function peekParticle(p) {
+    if (peek.linkId !== p.l.id) { peek = { linkId: p.l.id, items: [], selId: null, frozen: false, last: 0, seq: peek.seq || 0, hl: null }; }
+    const it = addPeek(p.l, OPCOL[p.col] || 'c', true);
+    peek.frozen = true; peek.hl = p;
+    if (it) it.batch = p.b.n;
+    renderPeek();
+  }
+  function renderPeek() {
+    const list = $('#peekList'); if (!list) return;
+    const fz = $('#peekFreeze'); fz.textContent = peek.frozen ? 'Resume feed' : 'Pause feed';
+    const live = !peek.frozen && S.running;
+    const OPN = { c: 'insert', u: 'update', d: 'delete', r: 'read' };
+    const cls = { c: 'ins', u: 'upd', d: 'del' };
+    list.innerHTML = peek.items.length ? peek.items.map((it, i) => `<button class="peek-row ${(peek.selId ? it.id === peek.selId : i === 0) ? 'on' : ''}" data-pk="${it.id}"><i class="${it.rec.fmt === 'trigger' ? 'ctrl' : it.rec.fmt === 'dropped' ? 'del' : cls[it.op] || 'ins'}"></i><span class="op">${it.rec.fmt === 'trigger' ? 'trigger' : it.rec.fmt === 'dropped' ? 'lost' : OPN[it.op] || 'record'}</span><span class="sum">${esc(PL.REC.short(it.rec))}</span><span class="t">T+${fmtS(it.at)}</span></button>`).join('')
+      : `<div class="note">Nothing has crossed yet. ${S.running ? '' : 'The simulation is paused.'}</div>`;
+    const it = peek.items.find(x => x.id === peek.selId) || peek.items[0];
+    $('#peekDetail').innerHTML = it ? `${it.batch ? `<div class="peek-batch">This dot carries ${fmt(it.batch)} records. One of them:</div>` : ''}${PL.REC.view(it.rec)}` : '';
+    list.classList.toggle('live', live);
   }
 
   /* ---------- live inspector content ---------- */
@@ -580,6 +673,7 @@
     if (r.limitedBy) html += `<div class="note warn">Only ${r.limitedBy} of ${total} ${n.type === 'spark' ? 'cores' : 'slots'} can work: the Kafka topic has ${r.limitedBy} partitions, and each partition is read by one task. Striped boxes sit idle.</div>`;
     return html;
   }
+  ui.runsHTML = runs => runsViz(runs);
   function runsViz(runs, isCtl) {
     if (!runs.length) return '<div class="note">No runs yet.</div>';
     return '<div class="runs">' + runs.map(x => {
@@ -767,9 +861,19 @@
   const PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5z"/></svg>', PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
   function setRunning(v) {
     S.running = v; const b = $('#playBtn'); b.innerHTML = v ? PAUSE : PLAY;
+    $('#stepBtn').classList.toggle('dim', v); if (PL.inside) $('#stage').classList.toggle('paused', !v);
     b.title = v ? 'Pause simulation (Space)' : 'Resume simulation (Space)'; b.setAttribute('aria-label', b.title);
   }
+  ui.setRunning = setRunning;
   $('#playBtn').onclick = () => setRunning(!S.running);
+  // advance a paused simulation by a quarter second, so you can watch one tick at a time
+  function stepSim() {
+    if (S.running) setRunning(false);
+    for (let i = 0; i < 5; i++) PL.tick(0.05);
+    updateNodeStats(); updateLive(); updateHud();
+  }
+  $('#stepBtn').onclick = stepSim;
+  $('#traceBtn').onclick = () => PL.trace.active ? PL.trace.stop() : PL.trace.start();
   $('#speedSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; S.speed = +b.dataset.v; $('#speedSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
   function closeMenus() { $('#menus').innerHTML = ''; }
   function menu(anchor, html, alignRight) {
@@ -839,7 +943,7 @@
     const map = {};
     s.nodes.forEach(([key, type, x, y, cfg, name]) => { map[key] = PL.addNode(type, x, y, JSON.parse(JSON.stringify(cfg)), null, name).id; });
     s.links.forEach(([a, b]) => PL.addLink(map[a], map[b]));
-    S.scenario = id; S.tipHidden = false;
+    S.scenario = id; S.tipHidden = false; PL.trace.stop(); PL.inside.close();
     select(null); syncNodes(); showTip(s); renderDock(); requestAnimationFrame(fit); saveSoon();
   }
   ui.loadScenario = loadScenario;
@@ -881,9 +985,11 @@
     if (S.running) { let dt = realDt * S.speed; while (dt > 1e-6) { const st = Math.min(dt, 0.05); PL.tick(st); dt -= st; } }
     // real-run particles move in real time, even when the simulation is paused
     S.particles = S.particles.filter(p => { if (!(p.real || p.realCtrl)) return true; p.p += realDt / p.dur; return p.p < 1; });
+    PL.trace.tick(realDt); PL.trace.camera(realDt);
     draw();
+    PL.inside.frame(realDt);
     uiClock += realDt;
-    if (uiClock > 0.2) { uiClock = 0; updateNodeStats(); updateLive(); updateHud(); }
+    if (uiClock > 0.2) { uiClock = 0; updateNodeStats(); updateLive(); updateHud(); if (peek.hl && !S.particles.includes(peek.hl)) peek.hl = null; }
     requestAnimationFrame(frame);
   }
 

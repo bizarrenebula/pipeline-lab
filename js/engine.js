@@ -428,6 +428,7 @@ window.PL = window.PL || {};
       } else {
         push(to, p.b); p.l.rt.w += p.b.n;
       }
+      if (PL.onArrive) PL.onArrive(p);
     }
     S.particles = keep;
   }
